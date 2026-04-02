@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { CheckCircle2, Info, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
 
 import { Canvas } from '@/components/Canvas';
 import { ExportButtons } from '@/components/ExportButtons';
@@ -8,11 +8,19 @@ import { Navbar } from '@/components/Navbar';
 import { PropertyPanel } from '@/components/PropertyPanel';
 import { RulesModal } from '@/components/RulesModal';
 import { Sidebar } from '@/components/Sidebar';
+import { DicePanel } from '@/components/play/DicePanel';
+import { GameHUD } from '@/components/play/GameHUD';
+import { GameLog } from '@/components/play/GameLog';
+import { GameModal } from '@/components/play/GameModal';
+import { PlayerSidebar } from '@/components/play/PlayerSidebar';
+import { SetupPanel } from '@/components/play/SetupPanel';
 import { competencies } from '@/data/competencies';
+import { theme } from '@/styles/theme';
 import { useBoard } from '@/hooks/useBoard';
 import { useDragAndDrop } from '@/hooks/useDragAndDrop';
 import { useExport } from '@/hooks/useExport';
-import type { BoardConfig, BoardTile, CompetencyColor, PropertyLevel, TileTemplate, TileType } from '@/types';
+import { useGameState } from '@/hooks/useGameState';
+import type { BoardConfig, BoardTile, CompetencyColor, PlayerSetupInput, PropertyLevel, TileTemplate, TileType } from '@/types';
 import { exportJSON } from '@/utils/exportJSON';
 import { exportPDF } from '@/utils/exportPDF';
 import { exportPNG } from '@/utils/exportPNG';
@@ -22,97 +30,53 @@ const tileTypes: TileType[] = ['start', 'event', 'penalty', 'study', 'publicServ
 const propertyLevels: PropertyLevel[] = ['FC', 'AC'];
 const competencyColors: CompetencyColor[] = competencies.map((item) => item.color);
 
-const particleSeeds = [
-  { left: '6%', top: '14%', size: '4px', duration: '8s', delay: '0s' },
-  { left: '12%', top: '64%', size: '6px', duration: '10s', delay: '1s' },
-  { left: '18%', top: '30%', size: '3px', duration: '7s', delay: '2s' },
-  { left: '22%', top: '82%', size: '5px', duration: '11s', delay: '0.4s' },
-  { left: '30%', top: '12%', size: '4px', duration: '8.5s', delay: '1.4s' },
-  { left: '36%', top: '56%', size: '5px', duration: '9.2s', delay: '0.8s' },
-  { left: '42%', top: '24%', size: '3px', duration: '6.5s', delay: '2.2s' },
-  { left: '48%', top: '74%', size: '6px', duration: '12s', delay: '1.8s' },
-  { left: '54%', top: '16%', size: '4px', duration: '7.5s', delay: '0.3s' },
-  { left: '60%', top: '44%', size: '5px', duration: '10.5s', delay: '2.4s' },
-  { left: '66%', top: '84%', size: '3px', duration: '7.8s', delay: '1.1s' },
-  { left: '72%', top: '28%', size: '4px', duration: '9.8s', delay: '2.1s' },
-  { left: '78%', top: '62%', size: '6px', duration: '11.5s', delay: '0.9s' },
-  { left: '84%', top: '18%', size: '3px', duration: '6.8s', delay: '1.6s' },
-  { left: '88%', top: '76%', size: '5px', duration: '10.8s', delay: '2.6s' },
-  { left: '92%', top: '38%', size: '4px', duration: '8.2s', delay: '0.7s' },
+const defaultPlayerInputs = (): PlayerSetupInput[] => [
+  { id: 'player-1', name: '林汐', color: theme.colors.playerTokens[0] },
+  { id: 'player-2', name: '周越', color: theme.colors.playerTokens[1] },
 ];
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+const particles = Array.from({ length: 18 }).map((_, index) => ({
+  left: `${6 + ((index * 5) % 88)}%`,
+  top: `${8 + ((index * 7) % 80)}%`,
+  size: `${3 + (index % 4)}px`,
+  duration: `${6 + (index % 5)}s`,
+  delay: `${(index % 4) * 0.8}s`,
+}));
 
-const isTileType = (value: unknown): value is TileType =>
-  typeof value === 'string' && tileTypes.includes(value as TileType);
-
-const isPropertyLevel = (value: unknown): value is PropertyLevel =>
-  typeof value === 'string' && propertyLevels.includes(value as PropertyLevel);
-
-const isCompetencyColor = (value: unknown): value is CompetencyColor =>
-  typeof value === 'string' && competencyColors.includes(value as CompetencyColor);
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const isTileType = (value: unknown): value is TileType => typeof value === 'string' && tileTypes.includes(value as TileType);
+const isPropertyLevel = (value: unknown): value is PropertyLevel => typeof value === 'string' && propertyLevels.includes(value as PropertyLevel);
+const isCompetencyColor = (value: unknown): value is CompetencyColor => typeof value === 'string' && competencyColors.includes(value as CompetencyColor);
 
 const isBoardTile = (value: unknown): value is BoardTile => {
-  if (!isObject(value)) {
-    return false;
-  }
-
+  if (!isObject(value)) return false;
   const { id, index, type, name, description, points, competencyColor, propertyLevel, icon } = value;
-  if (
-    typeof id !== 'string' ||
-    typeof index !== 'number' ||
-    !isTileType(type) ||
-    typeof name !== 'string' ||
-    typeof description !== 'string' ||
-    typeof points !== 'number'
-  ) {
+  if (typeof id !== 'string' || typeof index !== 'number' || !isTileType(type) || typeof name !== 'string' || typeof description !== 'string' || typeof points !== 'number') {
     return false;
   }
-
-  if (competencyColor !== undefined && !isCompetencyColor(competencyColor)) {
-    return false;
-  }
-
-  if (propertyLevel !== undefined && !isPropertyLevel(propertyLevel)) {
-    return false;
-  }
-
-  if (icon !== undefined && typeof icon !== 'string') {
-    return false;
-  }
-
+  if (competencyColor !== undefined && !isCompetencyColor(competencyColor)) return false;
+  if (propertyLevel !== undefined && !isPropertyLevel(propertyLevel)) return false;
+  if (icon !== undefined && typeof icon !== 'string') return false;
   return true;
 };
 
 const parseBoardConfig = (value: unknown): BoardConfig => {
-  if (!isObject(value)) {
-    throw new Error('导入失败：JSON 顶层结构不正确。');
-  }
-
+  if (!isObject(value)) throw new Error('导入失败：JSON 顶层结构不正确。');
   const { size, tiles } = value;
   if (typeof size !== 'number' || !Number.isInteger(size) || size < 28 || size > 32 || size % 4 !== 0) {
     throw new Error('导入失败：棋盘 size 必须是 28 到 32 之间、且可被 4 整除的整数。');
   }
-
-  if (!Array.isArray(tiles)) {
-    throw new Error('导入失败：tiles 字段必须是数组。');
+  if (!Array.isArray(tiles) || !tiles.every(isBoardTile)) {
+    throw new Error('导入失败：tiles 字段不合法。');
   }
-
-  if (!tiles.every(isBoardTile)) {
-    throw new Error('导入失败：tiles 中存在不合法的格子数据。');
-  }
-
-  return {
-    size,
-    tiles: [...tiles].sort((left, right) => left.index - right.index),
-  };
+  return { size, tiles: [...tiles].sort((left, right) => left.index - right.index) };
 };
 
 export function Layout() {
   const boardRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [setupInputs, setSetupInputs] = useState<PlayerSetupInput[]>(defaultPlayerInputs);
 
   const {
     boardConfig,
@@ -122,23 +86,16 @@ export function Layout() {
     placeTile,
     removeTile,
     replaceBoard,
+    resetBoard,
     selectTile,
     updateTile,
   } = useBoard();
-  const {
-    draggingTemplate,
-    dropTargetIndex,
-    endDragging,
-    setDropTargetIndex,
-    startDragging,
-  } = useDragAndDrop();
+  const { draggingTemplate, dropTargetIndex, endDragging, setDropTargetIndex, startDragging } = useDragAndDrop();
   const { activeAction, isBusy, runAction, setStatusMessage, statusMessage } = useExport();
+  const { currentPlayer, gameState, rollDice, setMode, resetPlayground, startGame, choosePendingAction } = useGameState(boardConfig);
 
   const boardStats = useMemo(
-    () => ({
-      filledTiles: boardConfig.tiles.length,
-      emptyTiles: boardConfig.size - boardConfig.tiles.length,
-    }),
+    () => ({ filledTiles: boardConfig.tiles.length, emptyTiles: boardConfig.size - boardConfig.tiles.length }),
     [boardConfig.size, boardConfig.tiles.length],
   );
 
@@ -150,32 +107,19 @@ export function Layout() {
 
   const ensureBoardElement = () => {
     const element = boardRef.current;
-    if (!element) {
-      throw new Error('暂时无法读取棋盘区域，请刷新页面后重试。');
-    }
+    if (!element) throw new Error('暂时无法读取棋盘区域，请刷新页面后重试。');
     return element;
   };
 
-  const openImportDialog = () => {
-    importInputRef.current?.click();
-  };
+  const openImportDialog = () => importInputRef.current?.click();
 
   const handleImportJSON = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    await runAction(
-      'import',
-      async () => {
-        const rawContent = await file.text();
-        const parsed = parseBoardConfig(JSON.parse(rawContent));
-        replaceBoard(parsed);
-      },
-      `已成功导入 ${file.name}。`,
-    );
-
+    if (!file) return;
+    await runAction('import', async () => {
+      const parsed = parseBoardConfig(JSON.parse(await file.text()));
+      replaceBoard(parsed);
+    }, `已成功导入 ${file.name}。`);
     event.target.value = '';
   };
 
@@ -184,142 +128,170 @@ export function Layout() {
     setStatusMessage({ tone: 'success', text: '已创建新地图，棋盘已清空。' });
   };
 
+  const handleSwitchMode = (mode: 'editor' | 'play') => {
+    setMode(mode);
+    if (mode === 'editor') {
+      selectTile(null);
+    }
+  };
+
+  const handleAddPlayer = () => {
+    if (setupInputs.length >= 4) return;
+    const nextIndex = setupInputs.length;
+    setSetupInputs((current) => [
+      ...current,
+      {
+        id: `player-${Date.now()}-${nextIndex}`,
+        name: `玩家${nextIndex + 1}`,
+        color: theme.colors.playerTokens[nextIndex % theme.colors.playerTokens.length] ?? theme.colors.playerTokens[0],
+      },
+    ]);
+  };
+
+  const handleStartGame = () => {
+    const validPlayers = setupInputs.map((input) => ({ ...input, name: input.name.trim() })).filter((input) => input.name.length > 0);
+    if (validPlayers.length < 2) {
+      setStatusMessage({ tone: 'error', text: '至少需要 2 名玩家才能开始。' });
+      return;
+    }
+    startGame(validPlayers);
+    setStatusMessage({ tone: 'success', text: '本地热座模式已开始，祝你们玩得开心。' });
+  };
+
+  const handleResetPlay = () => {
+    resetPlayground();
+    setSetupInputs(defaultPlayerInputs());
+    setStatusMessage({ tone: 'info', text: '已回到玩家设置界面。' });
+  };
+
   return (
-    <div className="galgame-app relative flex min-h-screen flex-col overflow-hidden text-text-primary">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {particleSeeds.map((particle, index) => (
+    <div className="app-shell min-h-screen text-slate-800">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        {particles.map((particle, index) => (
           <span
             key={`particle-${index}`}
             className="particle"
-            style={{
-              left: particle.left,
-              top: particle.top,
-              ['--size' as string]: particle.size,
-              ['--duration' as string]: particle.duration,
-              ['--delay' as string]: particle.delay,
-            }}
+            style={{ left: particle.left, top: particle.top, ['--size' as string]: particle.size, ['--duration' as string]: particle.duration, ['--delay' as string]: particle.delay }}
           />
         ))}
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(circle_at_top,rgba(232,212,139,0.12),transparent_55%)]" />
-
       <Navbar
+        mode={gameState.mode}
         activeAction={activeAction}
         isBusy={isBusy}
         onImportJSON={openImportDialog}
         onNewMap={handleClearBoard}
         onOpenRules={() => setIsRulesOpen(true)}
-        onSaveJSON={() =>
-          void runAction('save', async () => exportJSON(boardConfig), '棋盘配置已保存为 lingyun-board.json。')
-        }
+        onResetPlay={handleResetPlay}
+        onSaveJSON={() => void runAction('save', async () => exportJSON(boardConfig), '棋盘配置已保存为 lingyun-board.json。')}
+        onSwitchMode={handleSwitchMode}
       />
 
       {statusMessage ? (
-        <div className="mx-4 mt-4">
-          <div
-            className={[
-              'status-panel flex items-center gap-3',
-              statusMessage.tone === 'success'
-                ? 'border-green-400/30 text-green-200'
-                : statusMessage.tone === 'error'
-                  ? 'border-red-400/30 text-red-200'
-                  : 'border-sky-400/30 text-sky-200',
-            ].join(' ')}
-          >
-            {statusMessage.tone === 'success' ? (
-              <CheckCircle2 size={16} />
-            ) : statusMessage.tone === 'error' ? (
-              <XCircle size={16} />
-            ) : (
-              <Info size={16} />
-            )}
+        <div className="mx-auto mt-4 max-w-[1600px] px-4 lg:px-6">
+          <div className={[
+            'inline-flex items-center gap-3 rounded-full border px-4 py-2 text-sm shadow-sm backdrop-blur-sm',
+            statusMessage.tone === 'success' ? 'border-emerald-100 bg-emerald-50/90 text-emerald-600' : statusMessage.tone === 'error' ? 'border-rose-100 bg-rose-50/90 text-rose-600' : 'border-sky-100 bg-sky-50/90 text-sky-600',
+          ].join(' ')}>
+            {statusMessage.tone === 'success' ? <CheckCircle2 size={16} /> : statusMessage.tone === 'error' ? <AlertCircle size={16} /> : <Info size={16} />}
             <span>{statusMessage.text}</span>
           </div>
         </div>
       ) : null}
 
-      <main className="relative z-10 flex flex-1 flex-col gap-4 overflow-hidden p-4 xl:flex-row">
-        <Sidebar
-          draggingTemplateId={draggingTemplate?.templateId ?? null}
-          onDragStartTemplate={startDragging}
-          onDragEndTemplate={endDragging}
-        />
+      <main className="relative z-10 mx-auto flex max-w-[1600px] flex-1 flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
+        {gameState.mode === 'editor' ? (
+          <>
+            <section className="clean-panel flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+              <div>
+                <div className="panel-kicker">编辑模式</div>
+                <h2 className="panel-heading">继续完善棋盘配置，再随时切到游玩模式体验</h2>
+              </div>
+              <div className="grid gap-3 text-center text-xs sm:grid-cols-4">
+                <MetricPill label="已放置" value={`${boardStats.filledTiles} 格`} />
+                <MetricPill label="空位" value={`${boardStats.emptyTiles} 格`} />
+                <MetricPill label="总格数" value={`${boardConfig.size} 格`} />
+                <MetricPill label="当前状态" value={selectedTileIndex === null ? '未选中' : `第 ${selectedTileIndex + 1} 格`} />
+              </div>
+            </section>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="panel-shell px-4 py-3 text-sm text-text-secondary">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <p className="font-title text-sm tracking-[0.18em] text-galgame-gold-light">当前棋盘状态</p>
-              <div className="rounded-full border border-galgame-border bg-black/10 px-3 py-1 text-xs text-galgame-gold-light">
-                {selectedTileIndex === null ? '未选中格子' : `正在编辑第 ${selectedTileIndex + 1} 格`}
+            <div className="flex flex-1 flex-col gap-4 xl:flex-row">
+              <Sidebar draggingTemplateId={draggingTemplate?.templateId ?? null} onDragStartTemplate={startDragging} onDragEndTemplate={endDragging} />
+              <Canvas
+                boardConfig={boardConfig}
+                boardRef={boardRef}
+                selectedTileIndex={selectedTileIndex}
+                dropTargetIndex={dropTargetIndex}
+                mode="editor"
+                onSelectTile={selectTile}
+                onDropTemplate={handleDropTemplate}
+                onHoverDropTarget={setDropTargetIndex}
+              />
+              <PropertyPanel
+                selectedTile={selectedTile}
+                selectedTileIndex={selectedTileIndex}
+                onRemoveTile={removeTile}
+                onUpdateTile={updateTile}
+              />
+            </div>
+
+            <ExportButtons
+              activeAction={activeAction}
+              isBusy={isBusy}
+              onExportJSON={() => void runAction('save', async () => exportJSON(boardConfig), '棋盘配置已保存为 lingyun-board.json。')}
+              onExportPDF={() => void runAction('pdf', async () => exportPDF(ensureBoardElement()), '棋盘 PDF 已导出。')}
+              onExportPNG={() => void runAction('png', async () => exportPNG(ensureBoardElement()), '棋盘 PNG 已导出。')}
+              onExportPuzzlePDF={() => void runAction('puzzle', async () => exportPuzzlePDF(ensureBoardElement()), '拼图版 PDF 已导出。')}
+              onImportJSON={openImportDialog}
+            />
+          </>
+        ) : gameState.status === 'setup' || gameState.players.length === 0 ? (
+          <SetupPanel
+            inputs={setupInputs}
+            onAddPlayer={handleAddPlayer}
+            onRemovePlayer={(id) => setSetupInputs((current) => current.filter((item) => item.id !== id))}
+            onUpdatePlayer={(id, patch) => setSetupInputs((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))}
+            onStart={handleStartGame}
+          />
+        ) : (
+          <>
+            <GameHUD currentPlayer={currentPlayer} gameState={gameState} />
+            <div className="flex flex-1 flex-col gap-4 xl:flex-row">
+              <PlayerSidebar currentPlayerId={currentPlayer?.id ?? null} players={gameState.players} />
+              <div className="flex min-w-0 flex-1 flex-col gap-4">
+                <Canvas
+                  boardConfig={boardConfig}
+                  boardRef={boardRef}
+                  selectedTileIndex={null}
+                  dropTargetIndex={null}
+                  mode="play"
+                  highlightedTileIndex={gameState.highlightedTileIndex}
+                  players={gameState.players}
+                  currentPlayerId={currentPlayer?.id ?? null}
+                  gameStatus={gameState.status}
+                  feedbackBursts={gameState.feedbackBursts}
+                />
+                <DicePanel canRoll={gameState.status === 'idle'} gameState={gameState} onRollDice={() => void rollDice()} />
               </div>
             </div>
-            <div className="decorative-divider mb-3" />
-            <div className="grid gap-3 text-center text-xs sm:grid-cols-4">
-              <StatusMetric label="已放置" value={`${boardStats.filledTiles} 格`} />
-              <StatusMetric label="空位" value={`${boardStats.emptyTiles} 格`} />
-              <StatusMetric label="拖拽模式" value="覆盖开启" />
-              <StatusMetric label="导出区域" value="仅棋盘主体" />
-            </div>
-          </div>
-
-          <Canvas
-            boardConfig={boardConfig}
-            boardRef={boardRef}
-            selectedTileIndex={selectedTileIndex}
-            dropTargetIndex={dropTargetIndex}
-            onSelectTile={selectTile}
-            onDropTemplate={handleDropTemplate}
-            onHoverDropTarget={setDropTargetIndex}
-          />
-
-          <ExportButtons
-            activeAction={activeAction}
-            isBusy={isBusy}
-            onExportPNG={() =>
-              void runAction('png', async () => exportPNG(ensureBoardElement()), '棋盘 PNG 已导出。')
-            }
-            onExportPDF={() =>
-              void runAction('pdf', async () => exportPDF(ensureBoardElement()), '棋盘 PDF 已导出。')
-            }
-            onExportPuzzlePDF={() =>
-              void runAction('puzzle', async () => exportPuzzlePDF(ensureBoardElement()), '拼图版 PDF 已导出。')
-            }
-            onExportJSON={() =>
-              void runAction('json', async () => exportJSON(boardConfig), '棋盘配置已导出为 lingyun-board.json。')
-            }
-            onImportJSON={openImportDialog}
-          />
-        </div>
-
-        <PropertyPanel
-          selectedTile={selectedTile}
-          selectedTileIndex={selectedTileIndex}
-          onUpdateTile={updateTile}
-          onRemoveTile={removeTile}
-        />
+            <GameLog logs={gameState.logs} />
+          </>
+        )}
       </main>
 
-      <input
-        ref={importInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(event) => {
-          void handleImportJSON(event);
-        }}
-      />
-
+      <GameModal choice={gameState.pendingChoice} onChoose={(optionId) => void choosePendingAction(optionId)} />
       <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
+      <input ref={importInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportJSON} />
     </div>
   );
 }
 
-function StatusMetric({ label, value }: { label: string; value: string }) {
+function MetricPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-galgame-border bg-black/10 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <p className="text-[11px] tracking-[0.18em] text-text-secondary">{label}</p>
-      <p className="mt-2 font-mono text-lg font-bold text-galgame-gold-orange">{value}</p>
+    <div className="rounded-[16px] border border-white/70 bg-white/70 px-4 py-3 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+      <p className="mt-2 font-mono text-base font-semibold text-slate-700">{value}</p>
     </div>
   );
 }

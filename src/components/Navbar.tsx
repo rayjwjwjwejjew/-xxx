@@ -1,77 +1,126 @@
-import { BookOpen, FolderUp, Plus, Save } from 'lucide-react';
+import { BookOpen, FileDown, FolderUp, Gamepad2, PenSquare, Plus, RotateCcw, Save } from 'lucide-react';
+
+import type { AppMode } from '@/types';
 
 interface NavbarProps {
+  mode: AppMode;
   activeAction: string | null;
   isBusy: boolean;
   onImportJSON: () => void;
   onNewMap: () => void;
   onOpenRules: () => void;
+  onResetPlay: () => void;
   onSaveJSON: () => void;
-}
-
-interface NavbarAction {
-  label: string;
-  icon: typeof Plus;
-  actionKey: 'new' | 'import' | 'rules' | 'save';
-  primary?: boolean;
-  onClick: () => void;
+  onSwitchMode: (mode: AppMode) => void;
 }
 
 export function Navbar({
+  mode,
   activeAction,
   isBusy,
   onImportJSON,
   onNewMap,
   onOpenRules,
+  onResetPlay,
   onSaveJSON,
+  onSwitchMode,
 }: NavbarProps) {
-  const actions: NavbarAction[] = [
-    { label: '新建地图', icon: Plus, actionKey: 'new', onClick: onNewMap },
-    { label: '导入 JSON', icon: FolderUp, actionKey: 'import', onClick: onImportJSON },
-    { label: '规则说明', icon: BookOpen, actionKey: 'rules', onClick: onOpenRules },
-    { label: '保存', icon: Save, actionKey: 'save', onClick: onSaveJSON, primary: true },
-  ];
-
   return (
-    <header className="relative z-10 border-b border-galgame-border bg-[rgba(10,16,32,0.85)] px-5 py-4 backdrop-blur-[20px]">
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(201,168,76,0.55),transparent)]" />
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-galgame-border bg-[rgba(201,168,76,0.08)] font-title text-lg text-galgame-gold-light shadow-[0_0_18px_rgba(201,168,76,0.15)]">
-            凌
-          </div>
-          <div>
-            <h1 className="font-title text-[22px] font-bold tracking-[0.24em] text-galgame-gold-light [text-shadow:0_0_15px_rgba(232,212,139,0.4)]">
-              云谷高中·凌云大富翁
-            </h1>
-            <p className="mt-1 text-xs tracking-[0.14em] text-text-secondary">
-              Yungu Lingyun Monopoly Map Maker · Galgame Edition
-            </p>
-          </div>
+    <header className="sticky top-0 z-30 border-b border-white/45 bg-white/58 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-500">Yungu High School</p>
+          <h1 className="truncate font-title text-[22px] font-semibold tracking-[0.08em] text-slate-800 md:text-[26px]">
+            云谷高中·凌云大富翁
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">地图编辑 + 本地热座游玩模式</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {actions.map(({ label, icon: Icon, primary, onClick, actionKey }) => {
-            const isActive = activeAction === actionKey;
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={onClick}
-                disabled={isBusy && actionKey !== 'rules'}
-                className={[
-                  'navbar-btn',
-                  primary ? 'border-galgame-gold-light text-galgame-gold-light' : '',
-                  isActive ? 'shadow-[0_0_18px_rgba(201,168,76,0.18)]' : '',
-                ].join(' ')}
-              >
-                <Icon size={16} />
-                <span>{isActive ? '处理中…' : label}</span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="glass-panel flex items-center gap-1 rounded-full p-1 shadow-sm">
+            <ModeButton active={mode === 'editor'} icon={PenSquare} label="编辑模式" onClick={() => onSwitchMode('editor')} />
+            <ModeButton active={mode === 'play'} icon={Gamepad2} label="游玩模式" onClick={() => onSwitchMode('play')} />
+          </div>
+
+          <div className="hidden h-8 w-px bg-white/70 lg:block" />
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {mode === 'editor' ? (
+              <>
+                <ActionButton icon={Plus} label="新建地图" onClick={onNewMap} disabled={isBusy} active={activeAction === 'new'} />
+                <ActionButton icon={FolderUp} label="导入 JSON" onClick={onImportJSON} disabled={isBusy} active={activeAction === 'import'} />
+                <ActionButton icon={Save} label="保存 JSON" onClick={onSaveJSON} disabled={isBusy} active={activeAction === 'save'} />
+              </>
+            ) : (
+              <>
+                <ActionButton icon={RotateCcw} label="重新开局" onClick={onResetPlay} disabled={isBusy} active={false} />
+                <ActionButton icon={FileDown} label="回到编辑" onClick={() => onSwitchMode('editor')} disabled={false} active={false} />
+              </>
+            )}
+            <ActionButton icon={BookOpen} label="规则说明" onClick={onOpenRules} disabled={false} active={activeAction === 'rules'} />
+          </div>
         </div>
       </div>
+      <div className="mx-auto h-px max-w-[1600px] bg-gradient-to-r from-transparent via-sky-200 to-transparent" />
     </header>
+  );
+}
+
+function ModeButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: typeof PenSquare;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition duration-200',
+        active
+          ? 'bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-[0_10px_24px_rgba(91,141,239,0.28)]'
+          : 'text-slate-600 hover:bg-white/70 hover:text-slate-800',
+      ].join(' ')}
+    >
+      <Icon size={16} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function ActionButton({
+  active,
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  icon: typeof Plus;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        'inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-4 py-2 text-sm text-slate-600 shadow-sm transition duration-200',
+        'hover:-translate-y-0.5 hover:bg-white hover:text-slate-800 hover:shadow-[0_10px_20px_rgba(91,141,239,0.14)]',
+        active ? 'ring-2 ring-sky-200' : '',
+        disabled ? 'cursor-not-allowed opacity-60' : '',
+      ].join(' ')}
+    >
+      <Icon size={16} />
+      <span>{label}</span>
+    </button>
   );
 }

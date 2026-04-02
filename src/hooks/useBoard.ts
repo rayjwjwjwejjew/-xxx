@@ -82,7 +82,7 @@ export function useBoard(initialBoard: BoardConfig = defaultBoardConfig) {
       ...currentBoard,
       tiles: currentBoard.tiles.filter((tile) => tile.index !== index),
     }));
-    setSelectedTileIndex(index);
+    setSelectedTileIndex(null);
   };
 
   return {

@@ -1,60 +1,66 @@
-import { Download, FileImage, FileJson2, FileStack, FileText, FolderUp } from 'lucide-react';
+import { Download, FileImage, FileJson, FileText, Puzzle, Upload } from 'lucide-react';
 
 interface ExportButtonsProps {
   activeAction: string | null;
   isBusy: boolean;
-  onExportPNG: () => void;
-  onExportPDF: () => void;
-  onExportPuzzlePDF: () => void;
   onExportJSON: () => void;
+  onExportPDF: () => void;
+  onExportPNG: () => void;
+  onExportPuzzlePDF: () => void;
   onImportJSON: () => void;
-}
-
-interface ActionButton {
-  key: string;
-  label: string;
-  icon: typeof Download;
-  onClick: () => void;
-  primary?: boolean;
 }
 
 export function ExportButtons({
   activeAction,
   isBusy,
-  onExportPNG,
-  onExportPDF,
-  onExportPuzzlePDF,
   onExportJSON,
+  onExportPDF,
+  onExportPNG,
+  onExportPuzzlePDF,
   onImportJSON,
 }: ExportButtonsProps) {
-  const actions: ActionButton[] = [
-    { key: 'png', label: '导出 PNG', icon: FileImage, onClick: onExportPNG, primary: true },
-    { key: 'pdf', label: '导出 PDF', icon: FileText, onClick: onExportPDF },
-    { key: 'puzzle', label: '拼图版 PDF', icon: FileStack, onClick: onExportPuzzlePDF },
-    { key: 'json', label: '导出 JSON', icon: FileJson2, onClick: onExportJSON },
-    { key: 'import', label: '导入 JSON', icon: FolderUp, onClick: onImportJSON },
-  ];
-
   return (
-    <div className="panel-shell flex min-h-14 flex-wrap items-center justify-center gap-3 px-4 py-3">
-      {actions.map(({ key, label, icon: Icon, onClick, primary }) => {
-        const isActive = activeAction === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={onClick}
-            disabled={isBusy}
-            className={[
-              primary ? 'toolbar-button toolbar-button-primary' : 'toolbar-button',
-              isBusy ? 'opacity-60' : '',
-            ].join(' ')}
-          >
-            <Icon size={16} />
-            <span>{isActive ? '处理中…' : label}</span>
-          </button>
-        );
-      })}
+    <div className="clean-panel flex flex-wrap items-center justify-center gap-3 px-4 py-4">
+      <ToolButton icon={FileImage} label="导出 PNG" onClick={onExportPNG} active={activeAction === 'png'} disabled={isBusy} primary />
+      <ToolButton icon={FileText} label="导出 PDF" onClick={onExportPDF} active={activeAction === 'pdf'} disabled={isBusy} primary />
+      <ToolButton icon={Puzzle} label="拼图版 PDF" onClick={onExportPuzzlePDF} active={activeAction === 'puzzle'} disabled={isBusy} />
+      <ToolButton icon={FileJson} label="导出 JSON" onClick={onExportJSON} active={activeAction === 'save'} disabled={isBusy} />
+      <ToolButton icon={Upload} label="导入 JSON" onClick={onImportJSON} active={activeAction === 'import'} disabled={isBusy} />
     </div>
+  );
+}
+
+function ToolButton({
+  active,
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+  primary = false,
+}: {
+  active: boolean;
+  disabled: boolean;
+  icon: typeof Download;
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        'inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition duration-200',
+        primary
+          ? 'bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-[0_12px_24px_rgba(91,141,239,0.24)] hover:-translate-y-0.5'
+          : 'border border-white/75 bg-white/80 text-slate-600 shadow-sm hover:-translate-y-0.5 hover:bg-white',
+        active ? 'ring-2 ring-sky-200' : '',
+        disabled ? 'cursor-not-allowed opacity-60' : '',
+      ].join(' ')}
+    >
+      <Icon size={16} />
+      <span>{label}</span>
+    </button>
   );
 }
